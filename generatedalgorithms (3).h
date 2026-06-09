@@ -14,10 +14,26 @@ struct Coeff {
     double c;            // intercept (m/s); keep 0 for MVP
 };
 
-// Default metal bat coefficients
+// Default metal bat coefficients 
 inline constexpr Coeff kMetal{ /*e*/0.28, /*k_potential*/0.92, /*c*/0.0 };
 // Default wood bat coefficients
 inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
+
+// ACTUAL MODEL NUMBERS
+
+// Tee Mode:
+//     Wood e_value = 0.
+//     Wood K_potential = 1.21
+//     Metal e_value = 0.26
+//     Metal K_potential = 1.10
+//         plateVelo = 0mph or 0m/s
+
+// Toss Mode:
+//     Wood e_value = 0.22
+//     Wood k_potential = 1.18
+//     Metal e_value = 0.26
+//     Metal k_potential = 1.10
+//         plateVelo = 5.36 mps (12 mph)
 
 // ------------------------------------------------------------
 // Spin × Distance drag (plate/release speed ratio, unitless)
