@@ -8,7 +8,6 @@
 //   test_drag.exe      (Windows)
 // =============================================================================
 
-#define KIT_RUN_TESTS
 #include "generatedalgorithms (3).h"
 #include <cstdio>
 #include <cmath>
