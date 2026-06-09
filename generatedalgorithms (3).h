@@ -22,7 +22,7 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 // ACTUAL MODEL NUMBERS
 
 // Tee Mode:
-//     Wood e_value = 0.
+//     Wood e_value = 0.22
 //     Wood K_potential = 1.21
 //     Metal e_value = 0.26
 //     Metal K_potential = 1.10
