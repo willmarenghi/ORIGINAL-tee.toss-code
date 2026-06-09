@@ -1,0 +1,25 @@
+name: Drag Model Tests
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Compile test suite
+        run: |
+          g++ -std=c++17 -DKIT_RUN_TESTS \
+              "test_drag.cpp" \
+              -o test_drag \
+              -lm
+
+      - name: Run drag model tests
+        run: ./test_drag
