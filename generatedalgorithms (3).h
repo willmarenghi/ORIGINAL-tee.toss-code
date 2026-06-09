@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 
 namespace kit {
 
@@ -170,8 +171,6 @@ inline void debugPrint(const Inputs& in, const Outputs& out) {
 // Unit tests  (compile with: #define KIT_RUN_TESTS 1)
 // ------------------------------------------------------------
 #ifdef KIT_RUN_TESTS
-#include <cstdio>
-#include <cmath>
 
 // Distances to test (ft → m): 25,30,35,40,44,46,48,50,54
 inline constexpr double kTestDists_m[] = {
