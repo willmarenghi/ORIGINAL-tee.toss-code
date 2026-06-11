@@ -8,7 +8,7 @@
 //   test_drag.exe      (Windows)
 // =============================================================================
 
-#include "generatedalgorithms (3).h"
+#include "kit_drag_model.h"
 #include <cstdio>
 #include <cmath>
 
