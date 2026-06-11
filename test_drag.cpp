@@ -8,7 +8,7 @@
 //   test_drag.exe      (Windows)
 // =============================================================================
 
-#include "kit_drag_model.h"
+#include "updated-drag-model.h"
 #include <cstdio>
 #include <cmath>
 
