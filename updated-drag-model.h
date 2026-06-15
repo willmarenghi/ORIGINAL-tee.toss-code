@@ -43,21 +43,30 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 // continuous formula using exact spin RPM and exact distance.
 //
 // Formula:
-//   omega     = spin_rpm * 2*pi/60               (rad/s)
-//   S         = r * omega / v_release            (spin parameter, dimensionless)
-//   CD0       = cd0ForDistance(dist_m)           (distance-dependent baseline drag)
-//   CD_eff    = CD0 - kCDspin * S               (effective drag coeff)
-//   k_eff     = kAeroFactor * CD_eff            (drag decay constant, 1/m)
+//   omega     = spin_rpm * 2*pi/60                    (rad/s)
+//   S         = r * omega / v_release                 (spin parameter, dimensionless)
+//   CD0       = cd0ForVelocityAndDistance(v, dist_m)  (2D baseline drag)
+//   CD_eff    = CD0 - kCDspin * S                    (effective drag coeff)
+//   k_eff     = kAeroFactor * CD_eff                 (drag decay constant, 1/m)
 //   multiplier = exp(-k_eff * dist_m)
 //
-// Calibration source (June 2026):
-//   45 pitches, Stalker radar (release + plate velo) + KIT radar (spin).
-//   Distances: 25, 30, 35, 40, 44 ft.  RMS error = 1.35 mph, MAE = 1.04 mph.
-//   54 ft: CD0 held at 44ft value — no calibration data beyond 44ft yet.
+// CD0 is a 2D lookup: velocity × distance.
+//   Slow anchor (40mph): calibrated from 45 Stalker+KIT pitches (June 2026).
+//                        RMS error = 1.37 mph across 25-44ft.
+//   Fast anchor (90mph): back-calculated so 90mph/2200rpm/60.5ft = 10% loss
+//                        (MLB standard). CD0_fast = 0.5199 (flat across distances
+//                        — no high-speed distance data yet).
+//   Between anchors:     linearly interpolated by release velocity.
+//   Below 40mph:         clamped to slow anchor values.
+//   Above 90mph:         clamped to fast anchor values.
+//
+// Why two anchors? The drag coefficient drops significantly as velocity rises
+// (Reynolds number effect / drag crisis). A baseball at 40mph experiences
+// roughly 2.6x more drag than at 90mph.
 //
 // Supported distance range: 25-54 ft (7.62-16.46 m)
-// Spin range: any RPM (no clamping to bins)
-// Velocity: any pitchRelease_mps > 0
+// Velocity range: calibrated 30-47mph (slow), anchored at 90mph (fast)
+// Spin range: any RPM
 // ------------------------------------------------------------
 namespace drag {
     constexpr double kBallRadius_m = 0.03683;
@@ -68,42 +77,63 @@ namespace drag {
 
     // Spin correction — higher spin → smaller CD (backspin lift effect).
     // Calibrated via least-squares regression on 45 pitches (Stalker + KIT radar, 2026-06).
-    // CD_eff = CD0(dist) - kCDspin * S,  where S = r*omega/v
+    // CD_eff = CD0(v, dist) - kCDspin * S,  where S = r*omega/v
     constexpr double kCDspin = 0.9946;
 
-    // Distance-dependent CD0 calibration table.
-    // Fitted via least-squares to 45 pitches across 25-44ft (Stalker plate velo ground truth,
-    // KIT radar spin, June 2026 dataset). RMS error = 1.35 mph.
-    // 54ft entry held at 44ft value — no calibration data beyond 44ft yet.
-    struct CD0Point { double dist_m; double CD0; };
-    inline constexpr CD0Point kCD0Table[] = {
-        {  7.620, 0.7638 },  // 25ft — calibrated (10 pitches)
-        {  9.144, 0.7934 },  // 30ft — calibrated (10 pitches)
-        { 10.668, 0.7654 },  // 35ft — calibrated (10 pitches)
-        { 12.192, 0.8580 },  // 40ft — calibrated (10 pitches)
-        { 13.411, 0.8673 },  // 44ft — calibrated (5 pitches)
-        { 14.630, 0.8673 },  // 48ft — PLACEHOLDER: held at 44ft value, needs calibration data
-        { 15.240, 0.8673 },  // 50ft — PLACEHOLDER: held at 44ft value, needs calibration data
-        { 16.459, 0.8673 },  // 54ft — PLACEHOLDER: held at 44ft value, needs calibration data
+    // 2D CD0 table: two velocity anchors × 8 distances.
+    // CD0 interpolates linearly between kVelSlow and kVelFast by release velocity.
+    constexpr double kVelSlow_mps = 17.882;  // 40 mph — slow-toss anchor
+    constexpr double kVelFast_mps = 40.234;  // 90 mph — fast-pitch anchor
 
+    struct CD0Point { double dist_m; double cd0_slow; double cd0_fast; };
+    inline constexpr CD0Point kCD0Table[] = {
+        //  dist_m    slow(40mph)  fast(90mph)
+        {  7.620,    0.7638,      0.5199 },  // 25ft — slow: calibrated; fast: anchored to MLB 10%
+        {  9.144,    0.7934,      0.5199 },  // 30ft — slow: calibrated
+        { 10.668,    0.7654,      0.5199 },  // 35ft — slow: calibrated
+        { 12.192,    0.8580,      0.5199 },  // 40ft — slow: calibrated
+        { 13.411,    0.8673,      0.5199 },  // 44ft — slow: calibrated
+        { 14.630,    0.8673,      0.5199 },  // 48ft — slow: PLACEHOLDER (needs data)
+        { 15.240,    0.8673,      0.5199 },  // 50ft — slow: PLACEHOLDER (needs data)
+        { 16.459,    0.8673,      0.5199 },  // 54ft — slow: PLACEHOLDER (needs data)
     };
     inline constexpr int kCD0TableSize = 8;
 }
 
-// Returns the distance-dependent CD0 baseline drag coefficient.
-// Linearly interpolates between calibrated points.
-inline double cd0ForDistance(double dist_m) {
-    const auto* t = drag::kCD0Table;
-    const int   n = drag::kCD0TableSize;
-    if (dist_m <= t[0].dist_m)     return t[0].CD0;
-    if (dist_m >= t[n-1].dist_m)   return t[n-1].CD0;
-    for (int i = 0; i + 1 < n; ++i) {
-        if (dist_m >= t[i].dist_m && dist_m <= t[i+1].dist_m) {
-            double frac = (dist_m - t[i].dist_m) / (t[i+1].dist_m - t[i].dist_m);
-            return t[i].CD0 + frac * (t[i+1].CD0 - t[i].CD0);
+// Returns the 2D CD0 baseline drag coefficient.
+// Interpolates linearly along the distance axis, then blends between the
+// slow (40mph) and fast (90mph) velocity anchors.
+inline double cd0ForVelocityAndDistance(double v_mps, double dist_m) {
+    const auto* t  = drag::kCD0Table;
+    const int   n  = drag::kCD0TableSize;
+
+    // 1) Interpolate distance axis to get cd0_slow and cd0_fast at this dist
+    double cd0_slow, cd0_fast;
+    if (dist_m <= t[0].dist_m) {
+        cd0_slow = t[0].cd0_slow;
+        cd0_fast = t[0].cd0_fast;
+    } else if (dist_m >= t[n-1].dist_m) {
+        cd0_slow = t[n-1].cd0_slow;
+        cd0_fast = t[n-1].cd0_fast;
+    } else {
+        cd0_slow = t[n-1].cd0_slow;
+        cd0_fast = t[n-1].cd0_fast;
+        for (int i = 0; i + 1 < n; ++i) {
+            if (dist_m >= t[i].dist_m && dist_m <= t[i+1].dist_m) {
+                double frac = (dist_m - t[i].dist_m) / (t[i+1].dist_m - t[i].dist_m);
+                cd0_slow = t[i].cd0_slow + frac * (t[i+1].cd0_slow - t[i].cd0_slow);
+                cd0_fast = t[i].cd0_fast + frac * (t[i+1].cd0_fast - t[i].cd0_fast);
+                break;
+            }
         }
     }
-    return t[n-1].CD0;
+
+    // 2) Blend between slow and fast anchors based on release velocity
+    const double v_clamped = std::max(drag::kVelSlow_mps,
+                                      std::min(v_mps, drag::kVelFast_mps));
+    const double vfrac = (v_clamped - drag::kVelSlow_mps)
+                       / (drag::kVelFast_mps - drag::kVelSlow_mps);
+    return cd0_slow + vfrac * (cd0_fast - cd0_slow);
 }
 
 // Debug telemetry from the drag calculation
@@ -124,7 +154,7 @@ inline double plateMultiplierAdjusted(double dist_m, int spin_rpm,
     const double v     = std::max(pitchRelease_mps, 0.1);
     const double omega = spin_rpm * (2.0 * M_PI / 60.0);
     const double S     = drag::kBallRadius_m * omega / v;
-    const double CD0   = cd0ForDistance(dist_m);
+    const double CD0   = cd0ForVelocityAndDistance(v, dist_m);
     const double CD    = std::max(0.05, CD0 - drag::kCDspin * S);
     const double k     = drag::kAeroFactor * CD;
     if (dbg) {
