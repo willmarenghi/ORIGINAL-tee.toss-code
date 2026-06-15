@@ -82,6 +82,7 @@ namespace drag {
         { 10.668, 0.7654 },  // 35ft — calibrated (10 pitches)
         { 12.192, 0.8580 },  // 40ft — calibrated (10 pitches)
         { 13.411, 0.8673 },  // 44ft — calibrated (5 pitches)
+        { 16.459, 0.8673 },  // 48ft — held at 44ft value, pending data
         { 16.459, 0.8673 },  // 54ft — held at 44ft value, pending data
     };
     inline constexpr int kCD0TableSize = 6;
