@@ -50,10 +50,10 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 //   k_eff     = kAeroFactor * CD_eff            (drag decay constant, 1/m)
 //   multiplier = exp(-k_eff * dist_m)
 //
-// CD0 calibration source:
-//   30-40 ft: Stalker radar gun measurements (confirmed)
-//   25 ft:    Stalker measurement flagged anomalous (possible short-range artifact)
-//   44-54 ft: Held at 40ft value pending further calibration
+// Calibration source (June 2026):
+//   45 pitches, Stalker radar (release + plate velo) + KIT radar (spin).
+//   Distances: 25, 30, 35, 40, 44 ft.  RMS error = 1.35 mph, MAE = 1.04 mph.
+//   54 ft: CD0 held at 44ft value — no calibration data beyond 44ft yet.
 //
 // Supported distance range: 25-54 ft (7.62-16.46 m)
 // Spin range: any RPM (no clamping to bins)
@@ -66,28 +66,25 @@ namespace drag {
     constexpr double kBallMass_kg  = 0.1417;
     constexpr double kAeroFactor   = kAirDensity * kBallArea_m2 / (2.0 * kBallMass_kg);
 
-    // Spin correction — higher spin → smaller CD (backspin lift effect)
-    constexpr double kCDspin = 0.2529;
+    // Spin correction — higher spin → smaller CD (backspin lift effect).
+    // Calibrated via least-squares regression on 45 pitches (Stalker + KIT radar, 2026-06).
+    // CD_eff = CD0(dist) - kCDspin * S,  where S = r*omega/v
+    constexpr double kCDspin = 0.9946;
 
-    // Distance-dependent CD0 calibration table
-    // CD0 shifts with distance because drag behaves differently at short vs long range.
-    // Each entry: { distance_m, CD0 }
-    // Interpolated linearly between points; clamped at ends.
-    //
-    //  25ft (7.62m):  0.820  — Stalker-measured, flagged anomalous (short-range artifact)
-    //  30ft (9.14m):  0.493  — Stalker-confirmed
-    //  35ft (10.67m): 0.483  — Stalker-confirmed
-    //  40ft (12.19m): 0.486  — Stalker-confirmed
-    //  54ft (16.46m): 0.486  — held flat, pending calibration data at longer distances
+    // Distance-dependent CD0 calibration table.
+    // Fitted via least-squares to 45 pitches across 25-44ft (Stalker plate velo ground truth,
+    // KIT radar spin, June 2026 dataset). RMS error = 1.35 mph.
+    // 54ft entry held at 44ft value — no calibration data beyond 44ft yet.
     struct CD0Point { double dist_m; double CD0; };
     inline constexpr CD0Point kCD0Table[] = {
-        {  7.620, 0.820 },
-        {  9.144, 0.493 },
-        { 10.668, 0.483 },
-        { 12.192, 0.486 },
-        { 16.459, 0.486 },
+        {  7.620, 0.7638 },  // 25ft — calibrated (10 pitches)
+        {  9.144, 0.7934 },  // 30ft — calibrated (10 pitches)
+        { 10.668, 0.7654 },  // 35ft — calibrated (10 pitches)
+        { 12.192, 0.8580 },  // 40ft — calibrated (10 pitches)
+        { 13.411, 0.8673 },  // 44ft — calibrated (5 pitches)
+        { 16.459, 0.8673 },  // 54ft — held at 44ft value, pending data
     };
-    inline constexpr int kCD0TableSize = 5;
+    inline constexpr int kCD0TableSize = 6;
 }
 
 // Returns the distance-dependent CD0 baseline drag coefficient.
