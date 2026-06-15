@@ -1,13 +1,11 @@
 #pragma once
 #include <algorithm>
-#include <array>
 #include <cmath>
-#include <cstdio>
 
 namespace kit {
 
 // ------------------------------------------------------------
-// Metal-only coefficients (MVP)
+// Bat coefficients
 // ------------------------------------------------------------
 struct Coeff {
     double e;            // collision efficiency (ball-bat COR-like term)
@@ -15,57 +13,45 @@ struct Coeff {
     double c;            // intercept (m/s); keep 0 for MVP
 };
 
-// Default metal bat coefficients
 inline constexpr Coeff kMetal{ /*e*/0.28, /*k_potential*/0.92, /*c*/0.0 };
-// Default wood bat coefficients
-inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
+inline constexpr Coeff kWood { /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 
 // ACTUAL MODEL NUMBERS
-
+//
 // Tee Mode:
-//     Wood e_value = 0.22
-//     Wood K_potential = 1.21
-//     Metal e_value = 0.26
-//     Metal K_potential = 1.10
-//         plateVelo = 0mph or 0m/s
-
+//     Wood e_value = 0.22,  Wood K_potential = 1.21
+//     Metal e_value = 0.26, Metal K_potential = 1.10
+//     plateVelo = 0 m/s
+//
 // Toss Mode:
-//     Wood e_value = 0.22
-//     Wood k_potential = 1.18
-//     Metal e_value = 0.26
-//     Metal k_potential = 1.10
-//         plateVelo = 5.36 mps (12 mph)
+//     Wood e_value = 0.22,  Wood k_potential = 1.18
+//     Metal e_value = 0.26, Metal k_potential = 1.10
+//     plateVelo = 5.36 m/s (12 mph)
 
 // ------------------------------------------------------------
 // Physics-based drag model
 //
-// Replaces the old spin-bin × distance lookup table with a
-// continuous formula using exact spin RPM and exact distance.
-//
 // Formula:
-//   omega     = spin_rpm * 2*pi/60                    (rad/s)
-//   S         = r * omega / v_release                 (spin parameter, dimensionless)
-//   CD0       = cd0ForVelocityAndDistance(v, dist_m)  (2D baseline drag)
-//   CD_eff    = CD0 - kCDspin * S                    (effective drag coeff)
-//   k_eff     = kAeroFactor * CD_eff                 (drag decay constant, 1/m)
-//   multiplier = exp(-k_eff * dist_m)
+//   omega      = spin_rpm * 2*pi/60                    (rad/s)
+//   S          = r * omega / v_release                 (spin parameter, dimensionless)
+//   CD0        = cd0ForVelocityAndDistance(v, dist_m)  (2D baseline drag coefficient)
+//   CD_eff     = CD0 - kCDspin * S                    (effective drag after spin correction)
+//   k_eff      = kAeroFactor * CD_eff                 (drag decay constant, 1/m)
+//   multiplier = exp(-k_eff * dist_m)                 (fraction of release velocity reaching plate)
 //
-// CD0 is a 2D lookup: velocity × distance.
-//   Slow anchor (40mph): calibrated from 82 Stalker+KIT pitches (June 2026).
-//                        RMS error = 1.69 mph across 25-50ft.
-//   Fast anchor (90mph): back-calculated so 90mph/2200rpm/60.5ft = 10% loss
-//                        (MLB standard). CD0_fast = 0.5199 (flat across distances
-//                        — no high-speed distance data yet).
-//   Between anchors:     linearly interpolated by release velocity.
-//   Below 40mph:         clamped to slow anchor values.
-//   Above 90mph:         clamped to fast anchor values.
+// CD0 is a 2D lookup: velocity x distance.
+//   Slow anchor (40 mph): calibrated from 82 Stalker+KIT pitches (June 2026).
+//                         RMS error = 1.69 mph across 25-50 ft.
+//   Fast anchor (90 mph): back-calculated so 90mph/2200rpm/60.5ft = 10% loss
+//                         (MLB standard). CD0_fast = 0.5199 flat across distances.
+//   Between anchors:      linearly interpolated by release velocity.
+//   Below 40 mph:         clamped to slow anchor values.
+//   Above 90 mph:         clamped to fast anchor values.
 //
-// Why two anchors? The drag coefficient drops significantly as velocity rises
-// (Reynolds number effect / drag crisis). A baseball at 40mph experiences
-// roughly 2.6x more drag than at 90mph.
+// Why two anchors? Drag coefficient drops as velocity rises (Reynolds number /
+// drag crisis effect). A baseball at 40 mph experiences ~2.6x more drag than at 90 mph.
 //
 // Supported distance range: 25-50 ft (7.62-15.24 m)
-// Velocity range: calibrated 30-47mph (slow), anchored at 90mph (fast)
 // Spin range: any RPM
 // ------------------------------------------------------------
 namespace drag {
@@ -75,38 +61,38 @@ namespace drag {
     constexpr double kBallMass_kg  = 0.1417;
     constexpr double kAeroFactor   = kAirDensity * kBallArea_m2 / (2.0 * kBallMass_kg);
 
-    // Spin correction — higher spin → smaller CD (backspin lift effect).
-    // Calibrated via least-squares regression on 45 pitches (Stalker + KIT radar, 2026-06).
+    // Spin correction coefficient.
     // CD_eff = CD0(v, dist) - kCDspin * S,  where S = r*omega/v
+    // Calibrated via least-squares regression on 82 Stalker+KIT pitches (June 2026).
     constexpr double kCDspin = 0.9946;
 
-    // 2D CD0 table: two velocity anchors × 7 distances.
-    // CD0 interpolates linearly between kVelSlow and kVelFast by release velocity.
+    // Velocity anchors for 2D CD0 interpolation
     constexpr double kVelSlow_mps = 17.882;  // 40 mph — slow-toss anchor
     constexpr double kVelFast_mps = 40.234;  // 90 mph — fast-pitch anchor
 
+    // 2D CD0 calibration table: 7 distances x 2 velocity anchors.
+    // cd0_slow: calibrated from real radar data (Stalker + KIT, June 2026).
+    // cd0_fast: 0.5199 at all distances — derived from MLB 10% velocity loss standard.
     struct CD0Point { double dist_m; double cd0_slow; double cd0_fast; };
     inline constexpr CD0Point kCD0Table[] = {
-        //  dist_m    slow(40mph)  fast(90mph)
-        {  7.620,    0.7366,      0.5199 },  // 25ft — calibrated (14 pitches, sessions 1+2)
-        {  9.144,    0.8101,      0.5199 },  // 30ft — calibrated (15 pitches, sessions 1+2)
-        { 10.668,    0.7994,      0.5199 },  // 35ft — calibrated (15 pitches, sessions 1+2)
-        { 12.192,    0.8339,      0.5199 },  // 40ft — calibrated (10 pitches, session 1)
-        { 13.411,    0.7965,      0.5199 },  // 44ft — calibrated (10 pitches, sessions 1+2)
-        { 14.630,    0.7557,      0.5199 },  // 48ft — calibrated (8 pitches, session 2)
-        { 15.240,    0.6644,      0.5199 },  // 50ft — calibrated (10 pitches, session 2)
+        {  7.620,  0.7366,  0.5199 },  // 25ft — 14 pitches
+        {  9.144,  0.8101,  0.5199 },  // 30ft — 15 pitches
+        { 10.668,  0.7994,  0.5199 },  // 35ft — 15 pitches
+        { 12.192,  0.8339,  0.5199 },  // 40ft — 10 pitches
+        { 13.411,  0.7965,  0.5199 },  // 44ft — 10 pitches
+        { 14.630,  0.7557,  0.5199 },  // 48ft —  8 pitches
+        { 15.240,  0.6644,  0.5199 },  // 50ft — 10 pitches
     };
     inline constexpr int kCD0TableSize = 7;
 }
 
 // Returns the 2D CD0 baseline drag coefficient.
-// Interpolates linearly along the distance axis, then blends between the
-// slow (40mph) and fast (90mph) velocity anchors.
+// Step 1: interpolates along the distance axis.
+// Step 2: blends between slow (40mph) and fast (90mph) velocity anchors.
 inline double cd0ForVelocityAndDistance(double v_mps, double dist_m) {
-    const auto* t  = drag::kCD0Table;
-    const int   n  = drag::kCD0TableSize;
+    const auto* t = drag::kCD0Table;
+    const int   n = drag::kCD0TableSize;
 
-    // 1) Interpolate distance axis to get cd0_slow and cd0_fast at this dist
     double cd0_slow, cd0_fast;
     if (dist_m <= t[0].dist_m) {
         cd0_slow = t[0].cd0_slow;
@@ -127,7 +113,6 @@ inline double cd0ForVelocityAndDistance(double v_mps, double dist_m) {
         }
     }
 
-    // 2) Blend between slow and fast anchors based on release velocity
     const double v_clamped = std::max(drag::kVelSlow_mps,
                                       std::min(v_mps, drag::kVelFast_mps));
     const double vfrac = (v_clamped - drag::kVelSlow_mps)
@@ -137,16 +122,15 @@ inline double cd0ForVelocityAndDistance(double v_mps, double dist_m) {
 
 // Debug telemetry from the drag calculation
 struct DragDebug {
-    double omega_rads;   // angular velocity (rad/s)
-    double spin_param;   // S = r*omega/v (dimensionless)
-    double CD0_used;     // distance-dependent baseline before spin correction
-    double CD_eff;       // effective drag coefficient after spin correction
-    double k_eff;        // drag decay constant (1/m)
+    double omega_rads;  // angular velocity (rad/s)
+    double spin_param;  // S = r*omega/v (dimensionless)
+    double CD0_used;    // 2D baseline drag before spin correction
+    double CD_eff;      // effective drag coefficient after spin correction
+    double k_eff;       // drag decay constant (1/m)
 };
 
-// plateMultiplierAdjusted — continuous physics-based drag multiplier.
-// CD0 is looked up from the distance-dependent calibration table.
-// Pass a non-null dbg pointer to capture intermediate values for logging.
+// Returns the plate velocity multiplier: fraction of release velocity reaching the plate.
+// Pass a non-null dbg pointer to capture intermediate values for diagnostics.
 inline double plateMultiplierAdjusted(double dist_m, int spin_rpm,
                                        double pitchRelease_mps,
                                        DragDebug* dbg = nullptr) {
@@ -170,46 +154,38 @@ inline double plateMultiplierAdjusted(double dist_m, int spin_rpm,
 // Public API
 // ------------------------------------------------------------
 struct Inputs {
-    double batSpeed_mps;      // BS at impact (m/s)
-    double pitchRelease_mps;  // V_release (m/s)
-    double distance_m;        // pitch distance in meters (25-54 ft / 7.62-16.46 m)
-    int    spin_rpm;          // pitch spin, exact RPM from radar
-    double EV_measured_mps;   // measured EV (m/s)
+    double batSpeed_mps;      // bat speed at impact (m/s)
+    double pitchRelease_mps;  // release velocity (m/s)
+    double distance_m;        // pitch distance (25-50 ft / 7.62-15.24 m)
+    int    spin_rpm;          // pitch spin from radar (exact RPM)
+    double EV_measured_mps;   // measured exit velocity (m/s)
 };
 
 struct Outputs {
-    // Drag model telemetry
-    DragDebug drag;              // omega, spin_param, CD_eff, k_eff
-    double multiplier_used;      // unitless drag multiplier
+    DragDebug drag;              // intermediate drag values for diagnostics
+    double multiplier_used;      // drag multiplier (unitless, 0-1)
     double plateVelocity_mps;    // V_plate = V_release * multiplier
 
-    // Model outputs
-    double potentialEV_mps;      // EV_pot = k(1+e)*BS + e*V_plate + c
-    double potentialSmash;       // EV_pot / BS
+    double potentialEV_mps;      // EV_pot = k*(1+e)*BS + e*V_plate + c
+    double potentialSmash;       // EV_pot / bat speed
 
-    // Derived from measured vs model
-    double smash_measured;       // EV_measured / BS
-    double squaredUp_pct_raw;    // 100 * EV_measured / EV_pot
-    double squaredUp_pct_ui;     // UI cap only: min(raw, 100)
+    double smash_measured;       // measured EV / bat speed
+    double squaredUp_pct_raw;    // 100 * measured EV / potential EV
+    double squaredUp_pct_ui;     // capped at 100% for display
 };
 
-// Main computation for metal/wood bats
 inline Outputs computePotential(const Inputs& in, const Coeff batCoeff) {
     Outputs out{};
 
-    // 1) Drag-adjusted plate velocity
     out.multiplier_used   = plateMultiplierAdjusted(in.distance_m, in.spin_rpm,
                                                      in.pitchRelease_mps, &out.drag);
     out.plateVelocity_mps = in.pitchRelease_mps * out.multiplier_used;
 
-    // 2) Potential EV from collision model:
-    //    EV_pot = k(1+e)*BS + e*V_plate + c
-    const double BS  = std::max(1e-6, in.batSpeed_mps);
+    const double BS     = std::max(1e-6, in.batSpeed_mps);
     out.potentialEV_mps = batCoeff.k_potential * (1.0 + batCoeff.e) * BS
-                          + batCoeff.e * out.plateVelocity_mps
-                          + batCoeff.c;
+                        + batCoeff.e * out.plateVelocity_mps
+                        + batCoeff.c;
 
-    // 3) Derived metrics
     out.potentialSmash    = out.potentialEV_mps / BS;
     out.smash_measured    = in.EV_measured_mps / BS;
 
@@ -219,119 +195,5 @@ inline Outputs computePotential(const Inputs& in, const Coeff batCoeff) {
 
     return out;
 }
-
-#if 0 // Enable for cage debugging
-#include <cstdio>
-inline void debugPrint(const Inputs& in, const Outputs& out) {
-  std::printf("[KIT] d=%.2fm spin=%drpm(%.1frad/s) S=%.4f CD0=%.4f CD_eff=%.4f k=%.5f/m | "
-              "mult=%.4f Vrel=%.1f Vplate=%.1f | "
-              "EV_meas=%.1f EV_pot=%.1f | "
-              "Sm_meas=%.3f Sm_pot=%.3f SqUp_raw=%.1f%%\n",
-              in.distance_m, in.spin_rpm,
-              out.drag.omega_rads, out.drag.spin_param,
-              out.drag.CD0_used, out.drag.CD_eff, out.drag.k_eff,
-              out.multiplier_used,
-              in.pitchRelease_mps, out.plateVelocity_mps,
-              in.EV_measured_mps, out.potentialEV_mps,
-              out.smash_measured, out.potentialSmash, out.squaredUp_pct_raw);
-}
-#endif
-
-// ------------------------------------------------------------
-// Unit tests  (compile with: #define KIT_RUN_TESTS 1)
-// ------------------------------------------------------------
-#ifdef KIT_RUN_TESTS
-
-// Distances to test (ft → m): 25,30,35,40,44,48,50
-inline constexpr double kTestDists_m[] = {
-    7.620, 9.144, 10.668, 12.192, 13.411, 14.630, 15.240
-};
-inline constexpr int kTestSpins[] = { 1000, 1700, 2600 };          // low, mid, high
-inline constexpr double kTestVelos[] = { 11.18, 17.88, 26.82 };   // 25, 40, 60 mph
-
-static void kitRunTests() {
-    int pass = 0, fail = 0;
-    const char* spinLabel[] = { "low ", "mid ", "high" };
-    const char* veloLabel[] = { "25mph", "40mph", "60mph" };
-
-    std::printf("=== KIT Drag Model Unit Tests ===\n");
-    std::printf("%-6s %-5s %-5s  %-8s  %s\n",
-                "dist_m", "spin", "velo", "mult", "checks");
-
-    for (double d : kTestDists_m) {
-        for (int si = 0; si < 3; ++si) {
-            for (int vi = 0; vi < 3; ++vi) {
-                DragDebug dbg{};
-                double mult = plateMultiplierAdjusted(d, kTestSpins[si],
-                                                      kTestVelos[vi], &dbg);
-                bool ok = true;
-                // multiplier must be (0, 1]
-                if (mult <= 0.0 || mult > 1.0) ok = false;
-                // must be closer to 1 at shorter distance than at 54ft
-                double mult54 = plateMultiplierAdjusted(16.459, kTestSpins[si],
-                                                         kTestVelos[vi]);
-                if (d < 16.459 && mult <= mult54) ok = false;
-                // CD must be positive
-                if (dbg.CD_eff <= 0.0) ok = false;
-
-                std::printf("%.3fm  %-4s  %-5s  %.4f  %s\n",
-                            d, spinLabel[si], veloLabel[vi], mult,
-                            ok ? "PASS" : "FAIL");
-                ok ? ++pass : ++fail;
-            }
-        }
-    }
-
-    std::printf("\n%d passed, %d failed\n", pass, fail);
-}
-#endif // KIT_RUN_TESTS
-
-// ------------------------------------------------------------
-// Legacy lookup table (kept for reference / calibration only)
-// Remove once physics model is validated in production.
-// ------------------------------------------------------------
-#if 0
-struct MultRow { double dist_m; std::array<double,8> m; };
-
-inline constexpr std::array<int,9> kSpinBins = {
-    1000,1200,1400,1600,1800,2000,2200,2400,2600
-};
-
-inline constexpr std::array<MultRow,6> kMultiplier = {{
-    {12.192, {0.969,0.970,0.972,0.974,0.975,0.976,0.978,0.980}}, // 40 ft
-    {13.411, {0.964,0.966,0.968,0.970,0.972,0.973,0.975,0.977}}, // 44 ft
-    {14.021, {0.956,0.959,0.961,0.962,0.964,0.965,0.967,0.969}}, // 46 ft
-    {14.630, {0.942,0.945,0.948,0.951,0.953,0.955,0.958,0.961}}, // 48 ft
-    {15.240, {0.927,0.931,0.935,0.939,0.942,0.945,0.948,0.952}}, // 50 ft
-    {16.459, {0.901,0.906,0.910,0.914,0.918,0.922,0.926,0.931}}, // 54 ft
-}};
-
-inline int spinIndex(int rpm) {
-    int clamped = std::max(1000, std::min(rpm, 2599));
-    for (int i = 0; i < 8; ++i) {
-        if (clamped >= kSpinBins[i] && clamped < kSpinBins[i+1]) return i;
-    }
-    return 7;
-}
-
-inline double nearestDistanceKey(double dist_m) {
-    double best = kMultiplier[0].dist_m;
-    double bestDiff = std::abs(dist_m - best);
-    for (const auto& row : kMultiplier) {
-        double d = std::abs(dist_m - row.dist_m);
-        if (d < bestDiff) { best = row.dist_m; bestDiff = d; }
-    }
-    return best;
-}
-
-inline double plateMultiplier(double dist_m, int spin_rpm) {
-    const double dkey = nearestDistanceKey(dist_m);
-    const int idx  = spinIndex(spin_rpm);
-    for (const auto& row : kMultiplier) {
-        if (std::abs(row.dist_m - dkey) < 0.001) return row.m[idx];
-    }
-    return 0.914;
-}
-#endif // legacy table
 
 } // namespace kit
