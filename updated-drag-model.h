@@ -82,11 +82,12 @@ namespace drag {
         { 10.668, 0.7654 },  // 35ft — calibrated (10 pitches)
         { 12.192, 0.8580 },  // 40ft — calibrated (10 pitches)
         { 13.411, 0.8673 },  // 44ft — calibrated (5 pitches)
-        { 16.459, 0.8673 },  // 48ft — held at 44ft value, pending data
-        { 16.459, 0.8673 },  // 50ft — held at 44ft value, pending data
-        { 16.459, 0.8673 },  // 54ft — held at 44ft value, pending data
+        { 14.630, 0.8673 },  // 48ft — PLACEHOLDER: held at 44ft value, needs calibration data
+        { 15.240, 0.8673 },  // 50ft — PLACEHOLDER: held at 44ft value, needs calibration data
+        { 16.459, 0.8673 },  // 54ft — PLACEHOLDER: held at 44ft value, needs calibration data
+
     };
-    inline constexpr int kCD0TableSize = 6;
+    inline constexpr int kCD0TableSize = 8;
 }
 
 // Returns the distance-dependent CD0 baseline drag coefficient.
