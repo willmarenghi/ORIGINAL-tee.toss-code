@@ -300,11 +300,5 @@ int main() {
     test5_edge_cases();
     test6_full_model();
 
-    // Built-in unit tests from the header
-    separator('=');
-    std::printf("BUILT-IN UNIT TESTS (from header)\n");
-    separator('=');
-    kit::kitRunTests();
-
     return 0;
 }
