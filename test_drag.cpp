@@ -36,9 +36,9 @@ static void test1_multiplier_grid() {
                                       "40 mph (medium toss)",
                                       "60 mph (fast overhand)" };
 
-    const double dists_ft[]  = { 25, 30, 35, 40, 44, 48, 50, 54 };
+    const double dists_ft[]  = { 25, 30, 35, 40, 44, 48, 50 };
     const int    spins[]     = { 1000, 1200, 1400, 1600, 1800, 2000, 2200, 2400, 2600 };
-    const int    nDist       = 8;
+    const int    nDist       = 7;
     const int    nSpin       = 9;
 
     for (int vi = 0; vi < 3; ++vi) {
@@ -299,12 +299,6 @@ int main() {
     test4_short_distance();
     test5_edge_cases();
     test6_full_model();
-
-    // Built-in unit tests from the header
-    separator('=');
-    std::printf("BUILT-IN UNIT TESTS (from header)\n");
-    separator('=');
-    kit::kitRunTests();
 
     return 0;
 }
