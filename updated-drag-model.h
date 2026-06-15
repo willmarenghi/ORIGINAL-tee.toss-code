@@ -64,7 +64,7 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 // (Reynolds number effect / drag crisis). A baseball at 40mph experiences
 // roughly 2.6x more drag than at 90mph.
 //
-// Supported distance range: 25-54 ft (7.62-16.46 m)
+// Supported distance range: 25-50 ft (7.62-15.24 m)
 // Velocity range: calibrated 30-47mph (slow), anchored at 90mph (fast)
 // Spin range: any RPM
 // ------------------------------------------------------------
@@ -80,7 +80,7 @@ namespace drag {
     // CD_eff = CD0(v, dist) - kCDspin * S,  where S = r*omega/v
     constexpr double kCDspin = 0.9946;
 
-    // 2D CD0 table: two velocity anchors × 8 distances.
+    // 2D CD0 table: two velocity anchors × 7 distances.
     // CD0 interpolates linearly between kVelSlow and kVelFast by release velocity.
     constexpr double kVelSlow_mps = 17.882;  // 40 mph — slow-toss anchor
     constexpr double kVelFast_mps = 40.234;  // 90 mph — fast-pitch anchor
@@ -95,9 +95,8 @@ namespace drag {
         { 13.411,    0.8673,      0.5199 },  // 44ft — slow: calibrated
         { 14.630,    0.8673,      0.5199 },  // 48ft — slow: PLACEHOLDER (needs data)
         { 15.240,    0.8673,      0.5199 },  // 50ft — slow: PLACEHOLDER (needs data)
-        { 16.459,    0.8673,      0.5199 },  // 54ft — slow: PLACEHOLDER (needs data)
     };
-    inline constexpr int kCD0TableSize = 8;
+    inline constexpr int kCD0TableSize = 7;
 }
 
 // Returns the 2D CD0 baseline drag coefficient.
@@ -243,9 +242,9 @@ inline void debugPrint(const Inputs& in, const Outputs& out) {
 // ------------------------------------------------------------
 #ifdef KIT_RUN_TESTS
 
-// Distances to test (ft → m): 25,30,35,40,44,48,50,54
+// Distances to test (ft → m): 25,30,35,40,44,48,50
 inline constexpr double kTestDists_m[] = {
-    7.620, 9.144, 10.668, 12.192, 13.411, 14.630, 15.240, 16.459
+    7.620, 9.144, 10.668, 12.192, 13.411, 14.630, 15.240
 };
 inline constexpr int kTestSpins[] = { 1000, 1700, 2600 };          // low, mid, high
 inline constexpr double kTestVelos[] = { 11.18, 17.88, 26.82 };   // 25, 40, 60 mph
