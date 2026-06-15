@@ -51,8 +51,8 @@ inline constexpr Coeff kWood{ /*e*/0.23, /*k_potential*/0.92, /*c*/0.0 };
 //   multiplier = exp(-k_eff * dist_m)
 //
 // CD0 is a 2D lookup: velocity × distance.
-//   Slow anchor (40mph): calibrated from 45 Stalker+KIT pitches (June 2026).
-//                        RMS error = 1.37 mph across 25-44ft.
+//   Slow anchor (40mph): calibrated from 82 Stalker+KIT pitches (June 2026).
+//                        RMS error = 1.69 mph across 25-50ft.
 //   Fast anchor (90mph): back-calculated so 90mph/2200rpm/60.5ft = 10% loss
 //                        (MLB standard). CD0_fast = 0.5199 (flat across distances
 //                        — no high-speed distance data yet).
@@ -88,13 +88,13 @@ namespace drag {
     struct CD0Point { double dist_m; double cd0_slow; double cd0_fast; };
     inline constexpr CD0Point kCD0Table[] = {
         //  dist_m    slow(40mph)  fast(90mph)
-        {  7.620,    0.7638,      0.5199 },  // 25ft — slow: calibrated; fast: anchored to MLB 10%
-        {  9.144,    0.7934,      0.5199 },  // 30ft — slow: calibrated
-        { 10.668,    0.7654,      0.5199 },  // 35ft — slow: calibrated
-        { 12.192,    0.8580,      0.5199 },  // 40ft — slow: calibrated
-        { 13.411,    0.8673,      0.5199 },  // 44ft — slow: calibrated
-        { 14.630,    0.8673,      0.5199 },  // 48ft — slow: PLACEHOLDER (needs data)
-        { 15.240,    0.8673,      0.5199 },  // 50ft — slow: PLACEHOLDER (needs data)
+        {  7.620,    0.7366,      0.5199 },  // 25ft — calibrated (14 pitches, sessions 1+2)
+        {  9.144,    0.8101,      0.5199 },  // 30ft — calibrated (15 pitches, sessions 1+2)
+        { 10.668,    0.7994,      0.5199 },  // 35ft — calibrated (15 pitches, sessions 1+2)
+        { 12.192,    0.8339,      0.5199 },  // 40ft — calibrated (10 pitches, session 1)
+        { 13.411,    0.7965,      0.5199 },  // 44ft — calibrated (10 pitches, sessions 1+2)
+        { 14.630,    0.7557,      0.5199 },  // 48ft — calibrated (8 pitches, session 2)
+        { 15.240,    0.6644,      0.5199 },  // 50ft — calibrated (10 pitches, session 2)
     };
     inline constexpr int kCD0TableSize = 7;
 }
